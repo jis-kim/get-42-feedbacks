@@ -1,0 +1,10 @@
+{
+  "name": "getFeedbacks",
+  "version": "1.0.0",
+  "description": "get my project's feedbacks from 42 api",
+  "main": "getProject.js",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^16.3.1"
+  }
+}
