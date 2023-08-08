@@ -1,11 +1,10 @@
 {
-  "name": "getFeedbacks",
+  "name": "get_42_feedbacks",
   "version": "1.0.0",
   "description": "get my project's feedbacks from 42 api",
-  "main": "getProject.js",
+  "main": "index.js",
   "license": "MIT",
   "dependencies": {
-    "@inquirer/checkbox": "^1.3.7",
     "@inquirer/prompts": "^3.0.2",
     "@inquirer/select": "^1.2.7",
     "dotenv": "^16.3.1"

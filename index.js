@@ -43,8 +43,8 @@ const options = {
   method: "GET",
 };
 
-const getProjectUsers = () => {
-  options.path = `/v2/users/${user}/projects_users?page[size]=100`;
+const getProjectsOfUsers = (pageNumber) => {
+  options.path = `/v2/users/${user}/projects_users?page[size]=10&page[number]=${pageNumber}`;
   return new Promise((resolve, reject) => {
     const request = https
       .request(options, (res) => {
@@ -53,7 +53,23 @@ const getProjectUsers = () => {
           data += chunk;
         });
         res.on("end", () => {
-          resolve(JSON.parse(data));
+          resolve(JSON.parse(data).filter((obj) => !obj.project.name.includes('Exam')).map((obj) => {
+            return {
+              project: {
+                id: obj.project.id,
+                name: obj.project.name,
+                slug: obj.project.slug,
+              },
+              teams: obj.teams.map((team) => {
+                return {
+                  id: team.id,
+                  name: team.name,
+                  final_mark: team.final_mark,
+                  status: team.status,
+                };
+              })
+            }
+          }));
         });
       })
       .on("error", (err) => {
@@ -73,7 +89,7 @@ const getScaleTeams = (teamId) => {
           data += chunk;
         });
         res.on("end", () => {
-          const parsed = JSON.parse(data).map((obj) => {
+          resolve (JSON.parse(data).map((obj) => {
             return {
               id: obj.id,
               scale_id: obj.scale_id,
@@ -95,8 +111,7 @@ const getScaleTeams = (teamId) => {
                 };
               }),
             };
-          });
-          resolve(parsed);
+          }));
         });
       })
       .on("error", (err) => {
@@ -109,58 +124,75 @@ options.headers = {
   Authorization: `Bearer ${access_token}`,
 };
 
-console.time("getProjects");
-const projectUsers = await getProjectUsers();
-console.timeEnd("getProjects");
+let pageNumber = 1;
+let projectNames = []
+const projectList = await getProjectsOfUsers(pageNumber);
 
-const filteredProjectList = projectUsers.filter((obj) => !obj.project.name.includes('Exam')).map((obj) => {
+projectNames.push(...projectList.map((obj) => {
   return {
-    project: {
-      id: obj.project.id,
-      name: obj.project.name,
-      slug: obj.project.slug,
-    },
-    teams: obj.teams.map((team) => {
-      return {
-        id: team.id,
-        name: team.name,
-        final_mark: team.final_mark,
-        status: team.status,
-      };
-    }),
+    name: obj.project.name,
+    value: obj,
   };
-});
+}));
 
-const selectProject = async () => {
+const selectProject = async (page) => {
+  let index = page * 5;
+  let next = true;
+  if (projectNames.length < index + 5) { // next page 초기 값 - 0, 1
+    pageNumber++;
+    const projectList = await getProjectsOfUsers(pageNumber);
+    if (projectList.length === 0) {
+      next = false;
+    }
+    else {
+      projectNames.push(...projectList.map((obj) => {
+        return {
+          name: obj.project.name,
+          value: obj,
+        };
+      }));
+    }
+  }
+  const choices = projectNames.slice(index, index + 5);
+  if (next === true) {
+    choices.push({name: 'next', value: 'next'})
+  }
+  if (index !== 0) {
+    choices.unshift({name: 'prev', value: 'prev'});
+  }
   const answer = await select({
     message: "Select projects to get scale team",
-    choices: filteredProjectList.map((obj) => {
-      return {
-        name: obj.project.name,
-        value: obj,
-      };
-    }),
+    choices
   })
 
-  console.log(answer);
-  const promises = answer.teams.map((team) =>
-    getScaleTeams(team.id),
-  );
-
-  const result = await Promise.all(promises);
-  fs.writeFileSync(answer.project.name + ".json", JSON.stringify(result, null, 2));
-  console.log(answer.project.name + ".json file is created.")
-
-  const cont = await confirm({message: "Do you want to get another project?"});
-  if (cont) {
-    await selectProject();
+  if (answer === 'prev') {
+    await selectProject(page - 1);
+    return;
+  }
+  else if (answer === 'next') {
+    await selectProject(page + 1);
+    return;
   }
   else {
-    console.log("Bye!")
+    const promises = answer.teams.map((team) =>
+      getScaleTeams(team.id),
+    );
+
+    const result = await Promise.all(promises);
+    fs.writeFileSync(answer.project.name + ".json", JSON.stringify(result, null, 2));
+    console.log(answer.project.name + ".json file is created.")
+
+    const cont = await confirm({message: "Do you want to get another project?"});
+    if (cont) {
+      await selectProject(0);
+    }
+    else {
+      console.log("Bye!")
+    }
   }
 }
 
-await selectProject();
+await selectProject(0);
 
 
 
