@@ -1,1 +1,5 @@
 .env
+scaleTeams.json
+projects.json
+node_modules
+

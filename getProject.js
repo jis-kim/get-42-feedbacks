@@ -91,7 +91,13 @@ const getScaleTeams = (teamId) => {
                 author_name: obj.corrector.login,
                 comment: obj.comment,
               },
-              feedbacks: obj.feedbacks,
+              feedbacks: obj.feedbacks.map((feedback) => {
+                return {
+                  id: feedback.id,
+                  comment: feedback.comment,
+                  rating: feedback.rating,
+                };
+              }),
             };
           });
           resolve(parsed);
@@ -110,7 +116,6 @@ issueToken().then((res) => {
   getProjects()
     .then((res) => {
       console.timeEnd("getProjects");
-      console.time("mapping projectList")
       const projectList = res.map((obj) => {
         return {
           project: {
@@ -128,7 +133,6 @@ issueToken().then((res) => {
           }),
         };
       });
-      console.timeEnd("mapping projectList")
       projectList.forEach((obj) => {
         console.log("id: ", obj.project.id, ", name: ", obj.project.name);
       });
