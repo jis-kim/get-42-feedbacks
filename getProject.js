@@ -1,13 +1,10 @@
-const https = require("https");
-const fs = require("fs");
-const readline = require("readline");
 
-require("dotenv").config();
+import * as https from "https";
+import * as fs from "fs";
+import { select, confirm } from "@inquirer/prompts";
+import { config } from "dotenv"
 
-const errorCallback = (err) => {
-  if (err) console.error(err);
-};
-
+config();
 
 const issueToken = () => {
   return new Promise((resolve, reject) => {
@@ -46,9 +43,8 @@ const options = {
   method: "GET",
 };
 
-const getProjects = () => {
-  console.time("getProjects");
-  options.path = `/v2/users/${user}/projects_users`;
+const getProjectUsers = () => {
+  options.path = `/v2/users/${user}/projects_users?page[size]=100`;
   return new Promise((resolve, reject) => {
     const request = https
       .request(options, (res) => {
@@ -108,71 +104,63 @@ const getScaleTeams = (teamId) => {
       });
   });
 };
+const { access_token } = await issueToken();
+options.headers = {
+  Authorization: `Bearer ${access_token}`,
+};
 
-issueToken().then((res) => {
-  options.headers = {
-    Authorization: `Bearer ${res.access_token}`,
-  };
-  getProjects()
-    .then((res) => {
-      console.timeEnd("getProjects");
-      const projectList = res.map((obj) => {
-        return {
-          project: {
-            id: obj.project.id,
-            name: obj.project.name,
-            slug: obj.project.slug,
-          },
-          teams: obj.teams.map((team) => {
-            return {
-              id: team.id,
-              name: team.name,
-              final_mark: team.final_mark,
-              status: team.status,
-            };
-          }),
-        };
-      });
-      projectList.forEach((obj) => {
-        console.log("id: ", obj.project.id, ", name: ", obj.project.name);
-      });
-      fs.writeFile(
-        "projects.json",
-        JSON.stringify(projectList, null, 2),
-        errorCallback,
-      );
+console.time("getProjects");
+const projectUsers = await getProjectUsers();
+console.timeEnd("getProjects");
 
-      const rl = readline.createInterface({
-        input: process.stdin,
-        output: process.stdout,
-      });
-      const askQuestion = () => {
-        rl.question("\nEnter project name to get scale team: ", (data) => {
-          const filtered = projectList.filter((obj) => {
-            return obj.project.name === data;
-          });
-          if (filtered.length === 0) {
-            console.log("\nNo project found. try again.");
-            askQuestion();
-          } else {
-            console.log(filtered[0].teams);
-            const promises = filtered[0].teams.map((team) =>
-              getScaleTeams(team.id),
-            );
-            Promise.all(promises).then((res) => {
-              fs.writeFile(
-                "scaleTeams.json",
-                JSON.stringify(res, null, 2),
-                errorCallback,
-              );
-            });
-            rl.close();
-          }
-        });
+const filteredProjectList = projectUsers.filter((obj) => !obj.project.name.includes('Exam')).map((obj) => {
+  return {
+    project: {
+      id: obj.project.id,
+      name: obj.project.name,
+      slug: obj.project.slug,
+    },
+    teams: obj.teams.map((team) => {
+      return {
+        id: team.id,
+        name: team.name,
+        final_mark: team.final_mark,
+        status: team.status,
       };
-      askQuestion();
-    })
-    .catch((err) => {
-      console.error(err);
-    });
+    }),
+  };
 });
+
+const selectProject = async () => {
+  const answer = await select({
+    message: "Select projects to get scale team",
+    choices: filteredProjectList.map((obj) => {
+      return {
+        name: obj.project.name,
+        value: obj,
+      };
+    }),
+  })
+
+  console.log(answer);
+  const promises = answer.teams.map((team) =>
+    getScaleTeams(team.id),
+  );
+
+  const result = await Promise.all(promises);
+  fs.writeFileSync(answer.project.name + ".json", JSON.stringify(result, null, 2));
+  console.log(answer.project.name + ".json file is created.")
+
+  const cont = await confirm({message: "Do you want to get another project?"});
+  if (cont) {
+    await selectProject();
+  }
+  else {
+    console.log("Bye!")
+  }
+}
+
+await selectProject();
+
+
+

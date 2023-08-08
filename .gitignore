@@ -2,4 +2,6 @@
 scaleTeams.json
 projects.json
 node_modules
-
+yarn-error.log
+!package.json
+*.json
